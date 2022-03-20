@@ -1,33 +1,32 @@
 var aws = require("aws-sdk");
 const dynamodb = new aws.DynamoDB();
-
+const ddb = new aws.DynamoDB.DocumentClient();
+const ddb_v = new aws.DynamoDB({
+    apiVersion: '2012-08-10'
+});
+const TABLE_USERS = "users";
 
 exports.handler = async (event) => {
-
-    const documentClient = new aws.DynamoDB.DocumentClient();
-
-    const params = {
-        TableName: "users",
-        KeyConditionExpression: "#userEmail = :myEmail",
+    let user_email = event.user_email;
+    var params = {
+        TableName: TABLE_USERS,
+        ProjectionExpression: "#em, user_identification_number, operator_name",
+        FilterExpression: "#em =:em",
         ExpressionAttributeNames: {
-            "#userEmail": "user_identification_number"
+            "#em": "user_email",
         },
         ExpressionAttributeValues: {
-            ":myEmail": "1234567890"
+            ":em": user_email
+
         }
     };
 
+    let pp = await ddb.scan(params).promise();
+
     try {
-        const data = await documentClient.query(params).promise();
-        console.log('El resultado es ',data)
+        return pp.Items[0];
     } catch (err) {
-        console.log(err)
+        return err;
     }
 
-    // TODO implement
-    const response = {
-        statusCode: 200,
-        body: JSON.stringify('Hello from Lambda!'),
-    };
-    return response;
-};
+}
