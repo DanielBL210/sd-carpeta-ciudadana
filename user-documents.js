@@ -2,11 +2,13 @@ var multipart = require('parse-multipart');
 
 const AWS = require('aws-sdk');
 
+const BUCKET_NAME = process.env.BUCKET_NAME;
+
 var s3 = new AWS.S3({ 
 params: {
-    Bucket: 'user-docs-bucket',
-    accessKeyId: 'AKIAVCPF3QKZDPS3JV2O',
-    secretAccessKey: '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'
+    Bucket: BUCKET_NAME,
+    accessKeyId: process.env.KEY_ACCESS,
+    secretAccessKey: process.env.KEY_PASSWORD
 }});
 
 exports.handler = async (event) => {
@@ -39,7 +41,7 @@ var files = multipart.Parse(bodyBuffer, boundary);
     
     
 async function getContextDisposition(event, boundary){
-    var rawDisposition = new Buffer(event.body.toString(), 'base64').toString();
+    var rawDisposition = new Buffer(event["body-json"].toString(), 'base64').toString();
     var arrDisposition = rawDisposition.split(boundary);
     arrDisposition.pop();
     arrDisposition.shift();
@@ -52,7 +54,7 @@ async function getContextDisposition(event, boundary){
 async function getPresignedKey(sub, fullPath){
   const filePath = (fullPath.split('/')).pop();
   var purl = s3.getSignedUrl('getObject', {
-      Bucket: 'carpetapp',
+      Bucket: BUCKET_NAME,
       Key: `documents/${sub}/${filePath}`,
       Expires: 60 * 60
   });
@@ -64,7 +66,7 @@ async function uploadFileIntoS3 (file, sub, name){
   var filenameArr = (file.filename).split('.');
   const extension = filenameArr[filenameArr.length - 1];
   var options = {
-    Bucket: 'carpetapp',
+    Bucket: BUCKET_NAME,
     Key: `documents/${file.filename}`, 
     Body: file.data,
     ContentType: `${file.type}`,

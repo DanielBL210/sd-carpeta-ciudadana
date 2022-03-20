@@ -11,6 +11,7 @@ exports.handler = async (event, context) => {
     return new Promise((resolve, reject) => {
         parse_user(event)
             .then(data => put_new_user(data.user_attributes, data.user_id))
+            .then(data_user => send_user_notification(data_user))
             .then(data => context.succeed(event))
             .catch(err => {
                 console.log('no se pudo crear user => ', err);
@@ -32,6 +33,7 @@ function put_new_user(user_attributes, user_id) {
             "operator_name": 'Operador Ciudadano',
             "operator": 1,
             "user_name": user_attributes.name,
+            "sub": user_attributes.sub
 
         }
     };
@@ -44,7 +46,7 @@ function put_new_user(user_attributes, user_id) {
                 reject(JSON.stringify(err, null, 2));
             } else {
                 console.log("Added user:", JSON.stringify(data, null, 2));
-                resolve(JSON.stringify(data, null, 2));
+                resolve(params.Item);
             }
         });
     });
@@ -68,6 +70,23 @@ function parse_user(event) {
 
 }
 
-function generate_response(data, resolve, reject) {
-    resolve(true);
+function send_user_notification(data) {
+    console.log('data_user',data);
+    let message= {
+         to: data.user_email,
+         subject: data.user_name + ' Bienvenido a Operador ciudadano CD (Carpeta Digital)',
+         text: data.user_name + ' Bienvenido a Operador ciudadano CD (Carpeta Digital). A continuacion podra subir sus documentos.',
+         
+     };
+
+    sendSQS(message,'10');
+
+
+
+    return {
+       // to: to,
+        //subject: subject,
+        //text: message
+    };
+
 }
