@@ -1,17 +1,25 @@
-var AWS = require("aws-sdk");
-var docClient = new AWS.DynamoDB.DocumentClient();
+const https = require('https');
+const host = process.env.HOST;
+const path = process.env.PATH;
+const AWS = require("aws-sdk");
+const sendSQS = require('./send_sqs');
+const docClient = new AWS.DynamoDB.DocumentClient();
 
 const TABLE_USERS = "users";
+const ID_OPERADOR = 21;
+const NAME_OPERDADOR = "Folder Ciudadano 3000";
 
 exports.handler = async (event, context) => {
     // TODO implement
 
-    console.log('Hola ', event)
+    console.log('Hola ', event, context);
+    //return event;
 
     return new Promise((resolve, reject) => {
-        parse_user(event)
+        validate_citizen_centralizer(event, context)
+            .then(event => parse_user(event))
             .then(data => put_new_user(data.user_attributes, data.user_id))
-            .then(data_user => send_user_notification(data_user))
+            .then(data_user => send_new_user_centralizer(data_user))
             .then(data => context.succeed(event))
             .catch(err => {
                 console.log('no se pudo crear user => ', err);
@@ -30,8 +38,9 @@ function put_new_user(user_attributes, user_id) {
         Item: {
             "user_identification_number": user_id,
             "user_email": user_attributes.email,
-            "operator_name": 'Operador Ciudadano',
-            "operator": 1,
+            "operator_name": NAME_OPERDADOR,
+            "operator": ID_OPERADOR,
+            "address": user_attributes.address,
             "user_name": user_attributes.name,
             "sub": user_attributes.sub
 
@@ -70,23 +79,40 @@ function parse_user(event) {
 
 }
 
-function send_user_notification(data) {
+async function send_new_user_centralizer(data) {
     console.log('data_user',data);
-    let message= {
-         to: data.user_email,
-         subject: data.user_name + ' Bienvenido a Operador ciudadano CD (Carpeta Digital)',
-         text: data.user_name + ' Bienvenido a Operador ciudadano CD (Carpeta Digital). A continuacion podra subir sus documentos.',
-         
-     };
-
-    sendSQS(message,'10');
-
-
-
-    return {
-       // to: to,
-        //subject: subject,
-        //text: message
+    
+     let new_user={
+        "id": parseInt(data.user_identification_number),
+        "name": data.user_name,
+        "address": data.address,
+        "email": data.user_email,
+        "operatorId": data.operator,
+        "operatorName": data.operator_name
     };
+    console.log(new_user);
+    return await sendSQS(new_user,'10');
+}
+
+function validate_citizen_centralizer(event, context) { 
+    let url = host + path + event.userName;
+    return new Promise(function (resolve, reject) {
+        https.get(url, (res) => {
+          
+          if(res.statusCode == 204){
+              resolve(event);
+          }else if(res.statusCode == 200){
+              context.fail("El ciudadano ya esta registrado en otro operador");
+          }else{
+              console.log("Error al consumir servicio de validacion statusCode ",res.statusCode);
+              context.fail("No se pudo validar el usuario");
+          }
+          
+            
+        }).on('error', (e) => {
+            context.fail(event);
+            reject(e);
+        })
+    })
 
 }
