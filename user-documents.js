@@ -1,6 +1,7 @@
 var multipart = require('parse-multipart');
 var jwt_decode = require('jwt-decode');
 const databaseConnection = require('./database');
+const sendSQS = require('./send_sqs');
 
 const AWS = require('aws-sdk');
 
@@ -47,12 +48,13 @@ async function documentTest(event) {
   console.log('decodeId', decodedId);
   let sub = decodedId.sub;
   console.log('Sub', sub);
-
+  let url_ext = null;
   for (var file of files) {
     var filenameArr = (file.filename).split('.');
     let ext = filenameArr[filenameArr.length - 1];
     if (ext == 'pdf') {
       var { url, key, bucket } = await uploadFileIntoS3(file, sub, doc_prefix_file);
+      url_ext = url;
       if (url != "") {
         let exist = await getDocumentDatabase(doc_type, sub);
         console.log(exist);
@@ -60,13 +62,23 @@ async function documentTest(event) {
           let result = await insertDocumentDatabase(doc_type, sub, ext);
           console.log('result', result);
         }
-
+        console.log(key, bucket);
+        let data_to_validate_doc = {
+          "userName": decodedId.username,
+          "urlDocument": file.filename,
+          "sub": sub,
+          "document_type": doc_type,
+          "documentTitle": doc_type_object[0].doc_name,
+          "document_type_name": doc_type_object[0].doc_name
+        };
+        let pepe = await send_validate_document(data_to_validate_doc);
+        console.log('pepe', pepe);
       }
     } else {
       return "Tipo de archivo no permitido";
     }
   }
-  return url;
+  return url_ext;
 }
 
 
@@ -77,8 +89,7 @@ async function getContextDisposition(event, boundary) {
   var arrDisposition = rawDisposition.split(boundary);
   arrDisposition.pop();
   arrDisposition.shift();
-  var names = (arrDisposition.map(x => x.split(`\"`)[1]));
-  return names;
+  return (arrDisposition.map(x => x.split(`\"`)[1]));
 }
 
 
@@ -86,12 +97,12 @@ async function getContextDisposition(event, boundary) {
 async function getPresignedKey(sub, fullPath) {
   const filePath = (fullPath.split('/')).pop();
 
-  var purl = s3.getSignedUrl('getObject', {
+  return s3.getSignedUrl('getObject', {
     Bucket: BUCKET_NAME,
     Key: `documents/${sub}/${filePath}`,
     Expires: 60 * 60
   });
-  return purl;
+
 }
 
 
@@ -156,6 +167,11 @@ async function getDocumentTypeDatabase(document_type) {
   return result;
 }
 
+
+async function send_validate_document(data) {
+  console.log(data);
+  return sendSQS(data, '10');
+}
 
 
 
